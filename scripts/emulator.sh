@@ -7,11 +7,19 @@ export ANDROID_HOME="$SDK"
 export ANDROID_AVD_HOME="C:/Users/ass/.android/avd"
 AVD="${1:-agent34}"
 
-# Без окна и звука: не мешает и не занимает видеокарту. Загрузка ~47 секунд.
+# -memory ОБЯЗАН совпадать с hw.ramSize из config.ini конкретного AVD — сам
+# config.ini недостаточен (см. data/defects.jsonl). Раньше -memory был захардкожен
+# в 8192 для любого AVD, из-за чего приложение на всех классах видело 7.8 ГБ.
+# Пробелы вокруг "=" в config.ini не гарантированы одинаковыми — допускаем оба вида.
+RAM=$(grep -oP '^hw\.ramSize\s*=\s*\K[0-9]+' "$ANDROID_AVD_HOME/$AVD.avd/config.ini" 2>/dev/null)
+RAM="${RAM:-2048}"
+
+# Без окна и звука. GPU-хост вместо программного рендерера swiftshader:
+# рисует на видеокарте (VRAM), а не грузит CPU — важно при параллельных инстансах.
 "$SDK/emulator/emulator.exe" -avd "$AVD" \
   -no-window -no-audio -no-boot-anim \
-  -gpu swiftshader_indirect -no-snapshot \
-  -memory 8192 &
+  -gpu host -no-snapshot \
+  -memory "$RAM" &
 
 echo "жду загрузки..."
 for i in $(seq 1 60); do
