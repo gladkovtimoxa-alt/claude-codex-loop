@@ -17,17 +17,30 @@ import sys
 import datetime
 
 VALID_ESCAPE_CHARS = set('"\\/bfnrtu')
+# Слэш перед этими буквами НЕВОЗМОЖНО починить автоматически: и "настоящий
+# управляющий символ", и "windows-путь вида \bin, \temp, \new" выглядят
+# одинаково. Молчаливая догадка уже испортила запись: System32\bash.exe
+# превратилось в System32<backspace>ash.exe — файл стал валидным, а текст
+# потерял букву. Тихая порча хуже явной ошибки разбора.
+AMBIGUOUS = set('bfnrtu')
 
 
 def repair_line(line):
-    """Вернуть строку с удвоенными «голыми» обратными слэшами."""
+    """Удвоить «голые» обратные слэши.
+
+    Возвращает (строка, список неоднозначных позиций). Если список не пуст,
+    чинить автоматически нельзя — нужна правка руками.
+    """
     out = []
+    ambiguous = []
     i = 0
     while i < len(line):
         ch = line[i]
         if ch == '\\':
             nxt = line[i + 1] if i + 1 < len(line) else ''
             if nxt in VALID_ESCAPE_CHARS:
+                if nxt in AMBIGUOUS:
+                    ambiguous.append((i, line[max(0, i - 20):i + 20]))
                 out.append(ch)
                 out.append(nxt)
                 i += 2
@@ -37,7 +50,7 @@ def repair_line(line):
             continue
         out.append(ch)
         i += 1
-    return ''.join(out)
+    return ''.join(out), ambiguous
 
 
 def main():
@@ -63,7 +76,7 @@ def main():
         except ValueError:
             pass
 
-        candidate = repair_line(line)
+        candidate, ambiguous = repair_line(line)
         try:
             json.loads(candidate)
         except ValueError as exc:
@@ -71,6 +84,17 @@ def main():
             result.append(line)
             unfixable += 1
             continue
+
+        if ambiguous:
+            print('  строка %d: ЧИНИТЬ АВТОМАТИЧЕСКИ НЕЛЬЗЯ' % num)
+            for pos, around in ambiguous:
+                print('     позиция %d: …%s…' % (pos, around))
+            print('     слэш перед b/f/n/r/t/u: управляющий символ и windows-путь')
+            print('     (\\bin, \\temp, \\new) выглядят одинаково. Править руками.')
+            result.append(line)
+            unfixable += 1
+            continue
+
         print('  строка %d: починена' % num)
         result.append(candidate)
         fixed += 1
