@@ -11,6 +11,7 @@
 | `adb` с путями на устройстве | **PowerShell** либо Bash с `MSYS_NO_PATHCONV=1` **префиксом** | Git Bash подменяет `/sdcard/...` на `C:/Program Files/Git/sdcard/...`; через `export` переменная НЕ работает |
 | Вытянуть бинарный файл | Bash или `adb pull` | PowerShell портит бинарники редиректом `>`, отдаёт UTF-16 с BOM |
 | Запуск Codex | Bash | промпт передавать файлом, не строкой |
+| `sh -n`, `bash -n`, любой шелл-скрипт | **только Bash** | голое имя `bash` из PowerShell резолвится в launcher WSL (`System32\bash.exe`), а дистрибутива нет: вместо вывода приходит ссылка на Microsoft Store. Git Bash стоит, но лежит по другому пути. Из PowerShell — только полным путём `C:\Program Files\Git\bin\bash.exe` |
 
 ## Файлы
 
