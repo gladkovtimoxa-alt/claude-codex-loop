@@ -161,10 +161,31 @@ publish_one(){
   echo "    удалённо: ${remote_tree:-нет}"
   if [ -n "$local_tree" ] && [ "$local_tree" = "$remote_tree" ]; then
     ok "содержимое совпадает"
+    check_root_ahead "$root"
     return 0
   fi
   bad "деревья РАЗОШЛИСЬ — считать неопубликованным"
   return 2
+}
+
+# Проекция уехала — а коммит, который её породил, остался в монорепозитории и
+# в его origin НЕ уходит. Дыра незаметная: скил опубликован, всё «зелено», но
+# монорепо тихо копит расхождение, и следующая сессия начнёт с ahead N.
+# Пушить чужой монорепозиторий сам не берусь: там рядом лежит чужая
+# незавершённая работа и ветка может быть не моей. Поэтому — говорю вслух.
+check_root_ahead(){
+  local root="$1" ahead branch
+  branch=$(git -C "$root" rev-parse --abbrev-ref HEAD 2>/dev/null)
+  ahead=$(git -C "$root" rev-list --count "@{upstream}..HEAD" 2>/dev/null) || return 0
+  [ "${ahead:-0}" -gt 0 ] || return 0
+  echo "    ${RED}внимание:${OFF} монорепозиторий ушёл вперёд на $ahead коммит(ов)"
+  echo "    ветка '$branch' не отправлена в свой origin; проекция от этого не страдает,"
+  echo "    но история монорепо расходится. Отправить:"
+  echo "        git -C '$root' push origin '$branch'"
+  if [ "${PUSH_ROOT:-0}" = "1" ]; then
+    say "PUSH_ROOT=1 — отправляю монорепозиторий"
+    git -C "$root" push origin "$branch" 2>&1 | tail -1
+  fi
 }
 
 # --- уборка за собой -------------------------------------------------------
