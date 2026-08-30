@@ -130,7 +130,11 @@ publish_one(){
       echo "    DRY_RUN: git add '$prefix' && git commit"
     else
       git -C "$root" add -- "$prefix" || return 1
-      git -C "$root" commit -q -m "Память скила: обновление $(date '+%Y-%m-%d %H:%M')" || return 1
+      # Сообщение можно и нужно задавать: MSG="..." publish-memory.sh
+      # Автоматическое ставится только чтобы не блокировать публикацию, но
+      # история памяти из таких строк нечитаема — при осмысленной правке
+      # передавать своё.
+      git -C "$root" commit -q -m "${MSG:-Память скила: обновление $(date '+%Y-%m-%d %H:%M')}" || return 1
       ok "коммит создан"
     fi
   else

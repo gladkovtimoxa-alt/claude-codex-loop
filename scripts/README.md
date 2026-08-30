@@ -703,7 +703,12 @@ git subtree push --prefix=skills/claude-codex-loop loop main
 scripts/publish-memory.sh --all      # оба скила: claude-codex-loop и vpnyour
 scripts/publish-memory.sh            # только текущий
 DRY_RUN=1 scripts/publish-memory.sh  # без коммита и отправки
+MSG="что и почему" scripts/publish-memory.sh --all   # своё сообщение коммита
 ```
+
+`MSG` задавать при каждой осмысленной правке: без него ставится строка с датой,
+и история памяти из таких строк нечитаема — по ней нельзя понять, что менялось,
+не открывая диффы.
 
 Коды возврата: `0` опубликовано и сверено · `1` отказ до отправки (битый JSONL,
 найден секрет, пустой префикс) · **`2` отправлено, но сверка не сошлась —
