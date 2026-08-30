@@ -32,7 +32,7 @@ if [ "$MODE" = "--heavy" ]; then MIN_AVAIL=250; else MIN_AVAIL=80; fi
 # стороне НЕ убивает процесс там — он остаётся сиротой и продолжает
 # жрать ресурсы, то есть диагностика превращается в часть аварии.
 OUT=$(timeout 30 ssh -o BatchMode=yes -o ConnectTimeout=15 $KEYOPT "$HOST" \
-      "timeout 20 sh -c 'uptime; free -m | sed -n 2p; nproc; swapon --show=SIZE --noheadings | head -1'" 2>&1)
+      "timeout 20 sh -c 'cat /proc/loadavg; free -m | sed -n 2p; nproc; swapon --show=SIZE --noheadings | head -1'" 2>&1)
 
 if [ $? -ne 0 ] || [ -z "$OUT" ]; then
     printf 'ШЛЮЗ: НЕ СНЯТО состояние %s\n' "$HOST"
@@ -42,14 +42,20 @@ if [ $? -ne 0 ] || [ -z "$OUT" ]; then
     exit 2
 fi
 
-LOAD=$(printf '%s\n' "$OUT" | sed -n 1p | sed 's/.*load average: //' | cut -d, -f1 | tr -d ' ')
+# Берём ВСЕ ТРИ средние. Судить по минутной нельзя: 30.08 шлюз отказал с
+# load1=1.23 при одном ядре, а нагрузку создал мой же обход, закончившийся
+# секундами раньше. Пятиминутная в тот момент была 0.42, пятнадцатиминутная
+# 0.36 — втрое ниже порога. Шлюз мерил наблюдателя, а не машину.
+LOAD1=$(printf  '%s\n' "$OUT" | sed -n 1p | awk '{print $1}')
+LOAD5=$(printf  '%s\n' "$OUT" | sed -n 1p | awk '{print $2}')
+LOAD15=$(printf '%s\n' "$OUT" | sed -n 1p | awk '{print $3}')
 AVAIL=$(printf '%s\n' "$OUT" | sed -n 2p | awk '{print $NF}')
 CORES=$(printf '%s\n' "$OUT" | sed -n 3p | tr -d ' ')
 SWAP=$(printf '%s\n' "$OUT" | sed -n 4p | tr -d ' ')
 [ -n "$SWAP" ] || SWAP="НЕТ"
 
 printf 'ШЛЮЗ перед действием на %s\n\n' "$HOST"
-printf '  load (1 мин) ....... %s при %s ядрах\n' "$LOAD" "$CORES"
+printf '  load 1/5/15 ........ %s / %s / %s при %s ядрах\n' "$LOAD1" "$LOAD5" "$LOAD15" "$CORES"
 printf '  свободно памяти .... %s МБ (порог %s)\n' "$AVAIL" "$MIN_AVAIL"
 printf '  своп ............... %s\n' "$SWAP"
 printf '\n'
@@ -57,9 +63,16 @@ printf '\n'
 VERDICT=0
 
 # Сравнение дробных чисел через awk: в sh его нет.
-if awk "BEGIN{exit !($LOAD > $CORES)}"; then
-    printf '  СТОП: load выше числа ядер — машина уже не справляется.\n'
+# Решает ПЯТИМИНУТНАЯ: она переживает всплеск от собственной диагностики.
+if awk "BEGIN{exit !($LOAD5 > $CORES)}"; then
+    printf '  СТОП: пятиминутная load выше числа ядер — машина уже не справляется.\n'
     VERDICT=1
+fi
+
+# Расхождение минутной и пятнадцатиминутной — почти всегда след наблюдателя.
+if awk "BEGIN{exit !($LOAD1 > $CORES && $LOAD5 <= $CORES)}"; then
+    printf '  ЭТО ТЫ: минутная выше порога, пятиминутная нет — всплеск создал\n'
+    printf '          твой же обход. Не повод ждать, но повод не мерить сейчас.\n'
 fi
 
 if [ "$AVAIL" -lt "$MIN_AVAIL" ] 2>/dev/null; then
